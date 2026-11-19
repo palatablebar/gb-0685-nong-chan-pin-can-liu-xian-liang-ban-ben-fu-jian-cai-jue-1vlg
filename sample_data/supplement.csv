@@ -1,0 +1,3 @@
+id,sample_id,batch,product,analyte,method,version,sampled,reported,result,unit,lod,relation,note
+00037,S003,B002,苹果,P01,LC-MS/MS,3,2026-08-01,2026-08-04,0.004,mg/kg,0.001,00008,补录改批：S003由B001拆入B002
+00038,S003,B002,苹果,P02,GC-MS,1,2026-08-01,2026-08-04,30,ug/kg,1,,补录改批：同一样本另一残留项目随样本迁移

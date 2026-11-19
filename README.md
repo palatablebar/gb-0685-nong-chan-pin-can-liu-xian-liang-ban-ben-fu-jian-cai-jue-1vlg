@@ -31,7 +31,23 @@ docker compose exec -T app pytest -q
 docker compose config --quiet
 ```
 
-原始样例在 `sample_data/`。测试在 `tests/`。封存文件是单份CSV，含运行清单、计算证据、隔离原因与对账。复核需提交当前版本，陈旧复核返回409。
+原始样例在 `sample_data/`，补录改批样例为 `sample_data/supplement.csv`。测试在 `tests/`。封存文件是单份CSV，含运行清单、修订来源、对账、逐行归属证据、计算证据与隔离原因。复核需提交当前版本，陈旧复核返回409。
+
+## 补录与批次归属
+
+一个样本只归属一个批次。补录以 `parameters.supplements`（CSV文本列表）提交，可同时用 `parameters.revision_of` 指向已归档批次；原批次记录不被修改，修订失败或中断时旧版仍可读、可复核。
+
+```bash
+curl -s localhost:18254/api/runs -H 'Content-Type: application/json' -d '{
+  "sample":"clean.csv",
+  "parameters":{"revision_of":"<原批次号>","supplements":["<补录CSV文本>"]}}'
+```
+
+- 补录改批按样本级归属裁决：批次等级、样本计数、业务项目数与归属台账同源（`reconcile.consistent`），同一样本不会同时计入两批。
+- 补录行与原报告同号同版且内容一致视为重复（只计一次）；内容不同整次修订返回 `REVISION` 409。
+- 并列冲突主张保留原归属并隔离主张，避免临近出证的旧批次被翻转。
+- 同一基础输入与同一补录字节运行号相同，重跑不重复增删样本。
+- M6 页面显示归属台账；M7 可下载 `attribution.csv` 归属台账，封存CSV含全部归属证据行。
 
 ## 数据与限制
 

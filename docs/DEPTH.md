@@ -11,8 +11,8 @@
 | M3 限量选版 | 查看并复算限量选版 | `/api/m3_versions` | `app/modules/m3_versions/rules.py` | `tests/test_versions.py` |
 | M4 检出量换算 | 查看并复算检出量换算 | `/api/m4_segments` | `app/modules/m4_segments/rules.py` | `tests/test_segments.py` |
 | M5 复检裁决 | 查看并复算复检裁决 | `/api/m5_calculate` | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py` |
-| M6 批次判级 | 查看并复算批次判级 | `/api/m6_reconcile` | `app/modules/m6_reconcile/compare.py` | `tests/test_reconcile.py` |
-| M7 报告归档 | 查看并复算报告归档 | `/api/m7_archive` | `app/modules/m7_archive/export_out.py` | `tests/test_archive.py` |
+| M6 批次判级 | 查看并复算批次判级与样本归属 | `/api/m6_reconcile` | `app/attribution.py`、`app/modules/m6_reconcile/compare.py` | `tests/test_reconcile.py`、`tests/test_revision.py` |
+| M7 报告归档 | 查看并复算报告归档、下载归属台账 | `/api/m7_archive` | `app/modules/m7_archive/export_out.py` | `tests/test_archive.py`、`tests/test_revision.py` |
 
 ## 陷阱登记
 
@@ -32,10 +32,14 @@
 | TRAP-15 | ug/kg与mg/kg | 差1000倍 | 浓度统一mg/kg | `app/modules/m4_segments/rules.py` | `tests/test_segments.py::test_unit_conversion` |
 | TRAP-25 | 标准时间边界 | 双版或错版 | 采样日半开区间选版 | `app/modules/m3_versions/standards.py` | `tests/test_versions.py::test_halfopen_effective` |
 | TRAP-20 | 复检引用环 | 遍历无法结束 | 引用路径检测 | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py::test_cycle_rejected` |
+| TRAP-27 | 补录改批 | 同一样本在原批与新批各判一次 | 样本级归属裁决后按裁定批次分组 | `app/attribution.py`、`app/modules/m5_calculate/choose.py` | `tests/test_revision.py::test_rebatch_counts_sample_once` |
+| TRAP-28 | 补录重跑 | 重复插入样本或重复计数 | 补录字节入幂等键，同号同版重发去重 | `app/supplement.py`、`app/workflow.py` | `tests/test_revision.py::test_supplement_resend_is_duplicate_not_new_sample` |
+| TRAP-29 | 归属冲突翻转旧批 | 临近出证的旧批次被覆盖 | 并列冲突保留原归属并隔离主张 | `app/attribution.py` | `tests/test_revision.py::test_conflicting_rebatch_keeps_original` |
+| TRAP-30 | 修订中断 | 旧结论被覆盖或半写 | 修订原子提交，失败保留旧版 | `app/main.py`、`app/store.py` | `tests/test_revision.py::test_interrupted_revision_keeps_old_version` |
 
 ## 对账规则
 
-输入行数=采纳+隔离+空行+重复表头+完全重复；业务总数与计算证据独立求和。隔离行保留来源行、ID、原因码与原值。
+输入行数=采纳+隔离+空行+重复表头+完全重复；业务总数与计算证据独立求和。隔离行保留来源行、ID、原因码与原值。补录行以十万位段偏移来源行，基础行号不变。批次等级、样本计数、业务项目数与归属台账同源校验（`reconcile.consistent`）；被替代报告保留在采纳证据、归属台账与封存证据中，不进入计算与判级。
 
 ## 已知不覆盖
 

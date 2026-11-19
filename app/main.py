@@ -1,14 +1,14 @@
-import importlib,os
+import importlib
 from flask import Flask,jsonify,request,redirect,Response
 from app.config import MODULES
 from app.errors import DomainError
 from app.workflow import run,load
 from app import store
 from app.web import payload
-from app.modules.m7_archive.export_out import bundle
+from app.modules.m7_archive.export_out import bundle,attribution_bundle
 
 def create_app():
-    app=Flask(__name__);app.config['MAX_CONTENT_LENGTH']=2_000_000
+    app=Flask(__name__);app.config['MAX_CONTENT_LENGTH']=4_000_000
     for entry in MODULES:app.register_blueprint(importlib.import_module('app.modules.'+entry[0]+'.handler').bp)
     @app.errorhandler(DomainError)
     def domain_error(error):return jsonify(code=error.code,message=error.message),error.status
@@ -20,7 +20,18 @@ def create_app():
     def health():return jsonify(status='ok')
     @app.post('/api/runs')
     def submit():
-        content,params=payload();state=run(content,params);return jsonify(store.save(state['run_id'],state))
+        content,params=payload()
+        state=run(content,params)
+        parent=state['manifest']['parameters'].get('revision_of')
+        if parent:
+            # A revision is built from a known, archived batch.  The old result is
+            # left untouched, so an interrupted revision keeps the previous
+            # version readable and reviewable.
+            try:previous=store.get(parent)
+            except DomainError:raise DomainError('REVISION','修订来源批次不存在',409)
+            if not previous.get('archive',{}).get('ready') or previous.get('reconcile',{}).get('balanced') is False:
+                raise DomainError('REVISION','原批次尚未归档或对账未平，不能补录修订',409)
+        return jsonify(store.save(state['run_id'],state,parent=parent))
     @app.get('/api/runs')
     def list_runs():return jsonify(store.history())
     @app.get('/api/runs/<run_id>')
@@ -33,8 +44,12 @@ def create_app():
     @app.get('/api/archive/<run_id>/export.csv')
     def download(run_id):
         state=store.get(run_id)
-        if not state.get('reconcile',{}).get('balanced'):raise DomainError('UNBALANCED','对账未平')
+        if not state.get('archive',{}).get('ready'):raise DomainError('UNBALANCED','对账未平或批次归属未核对')
         return Response(bundle(state),mimetype='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename=evidence.csv'})
+    @app.get('/api/archive/<run_id>/attribution.csv')
+    def download_attribution(run_id):
+        state=store.get(run_id)
+        return Response(attribution_bundle(state),mimetype='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename=attribution.csv'})
     with app.app_context():
         if not store.history():
             state=run(load('dirty.csv'),{});store.save(state['run_id'],state)
